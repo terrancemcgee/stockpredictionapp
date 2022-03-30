@@ -1,64 +1,92 @@
-import streamlit as st
-from datetime import date
-
 import yfinance as yf
-from fbprophet import Prophet
-from fbprophet.plot import plot_plotly
-from plotly import graph_objs as go
+import streamlit as st
+import datetime 
+import talib 
+import ta
+import pandas as pd
+import requests
+yf.pdr_override()
 
-START = "2015-01-01"
-TODAY = date.today().strftime("%Y-%m-%d")
+st.write("""
+# Technical Analysis Web Application
+Shown below are the **Moving Average Crossovers**, **Bollinger Bands**, **MACD's**, **Commodity Channel Indexes**, and **Relative Strength Indexes** of any stock!
+""")
 
-st.title('Stock Forecast App')
+st.sidebar.header('User Input Parameters')
 
-stocks = ('GOOG', 'AAPL', 'MSFT', 'GME')
-selected_stock = st.selectbox('Select dataset for prediction', stocks)
+today = datetime.date.today()
+def user_input_features():
+    ticker = st.sidebar.text_input("Ticker", 'AAPL')
+    start_date = st.sidebar.text_input("Start Date", '2019-01-01')
+    end_date = st.sidebar.text_input("End Date", f'{today}')
+    return ticker, start_date, end_date
 
-n_years = st.slider('Years of prediction:', 1, 4)
-period = n_years * 365
+symbol, start, end = user_input_features()
 
+def get_symbol(symbol):
+    url = "http://d.yimg.com/autoc.finance.yahoo.com/autoc?query={}&region=1&lang=en".format(symbol)
+    result = requests.get(url).json()
+    for x in result['ResultSet']['Result']:
+        if x['symbol'] == symbol:
+            return x['name']
+company_name = get_symbol(symbol.upper())
 
-@st.cache
-def load_data(ticker):
-    data = yf.download(ticker, START, TODAY)
-    data.reset_index(inplace=True)
-    return data
+start = pd.to_datetime(start)
+end = pd.to_datetime(end)
 
-	
-data_load_state = st.text('Loading data...')
-data = load_data(selected_stock)
-data_load_state.text('Loading data... done!')
+# Read data 
+data = yf.download(symbol,start,end)
 
-st.subheader('Raw data')
-st.write(data.tail())
+# Adjusted Close Price
+st.header(f"Adjusted Close Price\n {company_name}")
+st.line_chart(data['Adj Close'])
 
-# Plot raw data
-def plot_raw_data():
-	fig = go.Figure()
-	fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
-	fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
-	fig.layout.update(title_text='Time Series data with Rangeslider', xaxis_rangeslider_visible=True)
-	st.plotly_chart(fig)
-	
-plot_raw_data()
+# ## SMA and EMA
+#Simple Moving Average
+data['SMA'] = talib.SMA(data['Adj Close'], timeperiod = 20)
 
-# Predict forecast with Prophet.
-df_train = data[['Date','Close']]
-df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
+# Exponential Moving Average
+data['EMA'] = talib.EMA(data['Adj Close'], timeperiod = 20)
 
-m = Prophet()
-m.fit(df_train)
-future = m.make_future_dataframe(periods=period)
-forecast = m.predict(future)
+# Plot
+st.header(f"Simple Moving Average vs. Exponential Moving Average\n {company_name}")
+st.line_chart(data[['Adj Close','SMA','EMA']])
 
-# Show and plot forecast
-st.subheader('Forecast data')
-st.write(forecast.tail())
-    
-st.write(f'Forecast plot for {n_years} years')
-fig1 = plot_plotly(m, forecast)
-st.plotly_chart(fig1)
+# Bollinger Bands
+data['upper_band'], data['middle_band'], data['lower_band'] = talib.BBANDS(data['Adj Close'], timeperiod =20)
 
-st.write("Forecast components")
-fig2 = m.plot_components(forecast)
-st.write(fig2)
+# Plot
+st.header(f"Bollinger Bands\n {company_name}")
+st.line_chart(data[['Adj Close','upper_band','middle_band','lower_band']])
+
+# ## MACD (Moving Average Convergence Divergence)
+# MACD
+data['macd'], data['macdsignal'], data['macdhist'] = talib.MACD(data['Adj Close'], fastperiod=12, slowperiod=26, signalperiod=9)
+
+# Plot
+st.header(f"Moving Average Convergence Divergence\n {company_name}")
+st.line_chart(data[['macd','macdsignal']])
+
+## CCI (Commodity Channel Index)
+# CCI
+cci = ta.trend.cci(data['High'], data['Low'], data['Close'], n=31, c=0.015)
+
+# Plot
+st.header(f"Commodity Channel Index\n {company_name}")
+st.line_chart(cci)
+
+# ## RSI (Relative Strength Index)
+# RSI
+data['RSI'] = talib.RSI(data['Adj Close'], timeperiod=14)
+
+# Plot
+st.header(f"Relative Strength Index\n {company_name}")
+st.line_chart(data['RSI'])
+
+# ## OBV (On Balance Volume)
+# OBV
+data['OBV'] = talib.OBV(data['Adj Close'], data['Volume'])/10**6
+
+# Plot
+st.header(f"On Balance Volume\n {company_name}")
+st.line_chart(data['OBV'])
