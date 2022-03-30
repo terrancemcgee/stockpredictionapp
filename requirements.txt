@@ -1,4 +1,4 @@
 streamlit
-fbprophet
+pip install fbprophet
 yfinance
 plotly
