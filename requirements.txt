@@ -1,1 +1,2 @@
-
+import yfinance
+import talib
