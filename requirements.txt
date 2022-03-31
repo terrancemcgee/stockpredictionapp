@@ -1,2 +1,2 @@
-import yfinance
-import talib
+ yfinance
+
