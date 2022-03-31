@@ -1,2 +1,4 @@
  yfinance
  ta-lib
+ pandas
+ numpy
