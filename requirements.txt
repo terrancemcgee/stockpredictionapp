@@ -5,4 +5,4 @@ yfinance==0.1.54
 altair==4.1.0
 bokeh==2.2.3
 plotly==4.12.0
-talib==0.4.17
+ta==0.4.17
